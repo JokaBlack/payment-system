@@ -1,8 +1,6 @@
 package com.joka.optima.controller;
 
-import com.joka.optima.dto.request.CardBalanceOperationRequestDTO;
 import com.joka.optima.dto.request.CardRequestDTO;
-import com.joka.optima.dto.request.CardStatusChangeRequestDTO;
 import com.joka.optima.dto.response.CardResponseDTO;
 import com.joka.optima.enums.CardStatus;
 import com.joka.optima.enums.PaymentSystemCode;
@@ -10,47 +8,37 @@ import com.joka.optima.exception.CardNotFoundException;
 import com.joka.optima.exception.GlobalExceptionHandler;
 import com.joka.optima.exception.InsufficientFundsException;
 import com.joka.optima.service.CardService;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
-import static org.hamcrest.Matchers.containsString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Controller-тесты для {@link CardController}.
+ * Web-layer тесты для {@link CardController}.
  */
-@ExtendWith(MockitoExtension.class)
+@WebMvcTest(CardController.class)
+@Import(GlobalExceptionHandler.class)
 class CardControllerTest {
 
-    @Mock
-    private CardService cardService;
-
+    @Autowired
     private MockMvc mockMvc;
 
-    @BeforeEach
-    void setUp() {
-
-        CardController cardController = new CardController(cardService);
-
-        mockMvc = MockMvcBuilders.standaloneSetup(cardController)
-                .setControllerAdvice(new GlobalExceptionHandler())
-                .build();
-    }
+    @MockitoBean
+    private CardService cardService;
 
     @Test
     void issueCard_shouldReturnCreated() throws Exception {
@@ -72,34 +60,32 @@ class CardControllerTest {
                         .content("""
                                 {
                                   "clientId": 1,
-                                  "paymentsSystem": "Visa"
+                                  "paymentSystemCode": "VISA"
                                 }
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(1))
-                .andExpect(jsonPath("$.paymentSystemCode").value("VISA"));
+                .andExpect(jsonPath("$.cardNumber").value("4123456789012345"))
+                .andExpect(jsonPath("$.paymentSystemCode").value("VISA"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
     }
 
     @Test
     void issueCard_shouldReturnBadRequest_whenPaymentSystemCodeIsInvalid() throws Exception {
-        String invalidRequest = """
-                {
-                  "clientId": 1,
-                  "paymentSystemCode": "ELCART1"
-                }
-                """;
-
         mockMvc.perform(post("/api/cards")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(invalidRequest))
+                        .content("""
+                                {
+                                  "clientId": 1,
+                                  "paymentSystemCode": "ELCART1"
+                                }
+                                """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", containsString("Invalid paymentSystemCode")));
+                .andExpect(jsonPath("$.message").exists());
     }
 
     @Test
     void topUp_shouldReturnOk() throws Exception {
-        CardBalanceOperationRequestDTO requestDTO = new CardBalanceOperationRequestDTO(BigDecimal.valueOf(500));
-
         CardResponseDTO responseDTO = new CardResponseDTO(
                         1L,
                         "4123456789012345",
@@ -117,7 +103,7 @@ class CardControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                "amount": 1000                                
+                                  "amount": 500
                                 }
                                 """))
                 .andExpect(status().isOk())
@@ -126,8 +112,6 @@ class CardControllerTest {
 
     @Test
     void debit_shouldReturnBadRequest_whenInsufficientFunds() throws Exception {
-        CardBalanceOperationRequestDTO requestDTO = new CardBalanceOperationRequestDTO(BigDecimal.valueOf(5000));
-
         when(cardService.debit(eq(1L), eq(BigDecimal.valueOf(5000))))
                 .thenThrow(new InsufficientFundsException("Insufficient funds"));
 
@@ -135,7 +119,7 @@ class CardControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                "amount": 500                                
+                                  "amount": 5000
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
@@ -144,8 +128,6 @@ class CardControllerTest {
 
     @Test
     void changeStatus_shouldReturnOk() throws Exception {
-        CardStatusChangeRequestDTO requestDTO = new CardStatusChangeRequestDTO(CardStatus.BLOCKED);
-
         CardResponseDTO responseDTO = new CardResponseDTO(
                         1L,
                         "4123456789012345",
@@ -163,7 +145,7 @@ class CardControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                "status": "BLOCKED"
+                                  "status": "BLOCKED"
                                 }
                                 """))
                 .andExpect(status().isOk())

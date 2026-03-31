@@ -53,7 +53,7 @@ public class CardController {
     /**
      * Изменяет статус карты.
      */
-    @PostMapping("/{cardId}/status")
+    @PatchMapping("/{cardId}/status")
     public CardResponseDTO changeStatus(@PathVariable Long cardId,
                                         @RequestBody CardStatusChangeRequestDTO requestDTO) {
         return cardService.changeStatus(cardId, requestDTO.getStatus());

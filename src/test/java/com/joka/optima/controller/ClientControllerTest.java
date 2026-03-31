@@ -1,68 +1,52 @@
 package com.joka.optima.controller;
 
-import com.joka.optima.dto.request.ClientRequestDTO;
 import com.joka.optima.dto.response.ClientResponseDTO;
 import com.joka.optima.exception.ClientNotFoundException;
 import com.joka.optima.exception.GlobalExceptionHandler;
 import com.joka.optima.service.ClientService;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
-import org.junit.jupiter.api.extension.ExtendWith;
-import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 
-import static org.hamcrest.Matchers.hasSize;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * Controller-тесты для {@link ClientController}.
+ * MVC-тесты для {@link ClientController}.
  */
-@ExtendWith(MockitoExtension.class)
+@WebMvcTest(ClientController.class)
+@Import(GlobalExceptionHandler.class)
 class ClientControllerTest {
 
-    @Mock
-    private ClientService clientService;
-
+    @Autowired
     private MockMvc mockMvc;
-    private ObjectMapper objectMapper;
 
-    @BeforeEach
-    void setUp() {
-        objectMapper = new ObjectMapper();
-
-        ClientController clientController = new ClientController(clientService);
-
-        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
-        validator.afterPropertiesSet();
-
-        mockMvc = MockMvcBuilders.standaloneSetup(clientController)
-                .setControllerAdvice(new GlobalExceptionHandler())
-                .setValidator(validator)
-                .build();
-    }
+    @MockitoBean
+    private ClientService clientService;
 
     @Test
     void create_shouldReturnCreated() throws Exception {
-        ClientRequestDTO requestDTO = new ClientRequestDTO("Aibek", "Asanov");
         ClientResponseDTO responseDTO = new ClientResponseDTO(1L, "Aibek", "Asanov");
 
-        when(clientService.create(any(ClientRequestDTO.class))).thenReturn(responseDTO);
+        when(clientService.create(org.mockito.ArgumentMatchers.any())).thenReturn(responseDTO);
 
         mockMvc.perform(post("/api/clients")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(requestDTO)))
+                        .content("""
+                                {
+                                  "name": "Aibek",
+                                  "lastName": "Asanov"
+                                }
+                                """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.name").value("Aibek"));
@@ -70,16 +54,14 @@ class ClientControllerTest {
 
     @Test
     void create_shouldReturnBadRequest_whenFieldsAreBlank() throws Exception {
-        String invalidRequest = """
-                {
-                  "name": "",
-                  "lastName": ""
-                }
-                """;
-
         mockMvc.perform(post("/api/clients")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(invalidRequest))
+                        .content("""
+                                {
+                                  "name": "",
+                                  "lastName": ""
+                                }
+                                """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").exists());
     }
@@ -115,8 +97,9 @@ class ClientControllerTest {
 
         when(clientService.getAll()).thenReturn(clients);
 
-        mockMvc.perform(get("/api/clients"))
+        mockMvc.perform(get("/api/clients/all"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)));
+                .andExpect(jsonPath("$[0].name").value("Aibek"))
+                .andExpect(jsonPath("$[1].name").value("Bek"));
     }
 }

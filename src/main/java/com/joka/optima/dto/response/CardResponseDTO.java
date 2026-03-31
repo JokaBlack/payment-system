@@ -12,7 +12,6 @@ import java.time.LocalDateTime;
 
 @Data
 @AllArgsConstructor
-@RequiredArgsConstructor
 public class CardResponseDTO {
     private Long id;
     private String cardNumber;
